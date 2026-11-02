@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Landmark-First Pickup: clickable prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --page:#DCE2DF; --ink:#15191C; --muted:#5B6569; --surface:#FFFFFF; --surface-2:#F0F3F2; --line:#D3DAD7;
+  --accent:#E8A200; --accent-ink:#3A2900; --accent-soft:#FFF0C4;
+  --go:#127A4D; --go-soft:#DCF2E6; --danger:#C2412D;
+  --land:#E3E8E3; --block:#D0D8D1; --road:#FFFFFF; --road-edge:#C6CEC9; --wall:#7F8B84; --compound:#D7E3D5;
+  --frame:#15191C;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --page:#0E1315; --ink:#EDF2F0; --muted:#98A4A8; --surface:#1A2124; --surface-2:#232C30; --line:#33403F;
+    --accent:#F2B21B; --accent-ink:#2A1E00; --accent-soft:#3A3013;
+    --go:#3CC488; --go-soft:#163427; --danger:#F07B65;
+    --land:#1D2528; --block:#283135; --road:#3A464A; --road-edge:#2B3538; --wall:#6E7C80; --compound:#203029;
+    --frame:#000000;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --page:#0E1315; --ink:#EDF2F0; --muted:#98A4A8; --surface:#1A2124; --surface-2:#232C30; --line:#33403F;
+  --accent:#F2B21B; --accent-ink:#2A1E00; --accent-soft:#3A3013;
+  --go:#3CC488; --go-soft:#163427; --danger:#F07B65;
+  --land:#1D2528; --block:#283135; --road:#3A464A; --road-edge:#2B3538; --wall:#6E7C80; --compound:#203029;
+  --frame:#000000;
+  color-scheme: dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--page);color:var(--ink);
+  font-family:"Hind Siliguri",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.stage{min-height:100%;display:flex;align-items:center;justify-content:center;gap:56px;padding:24px}
+.guide{width:300px;flex:none}
+.guide h1{font-size:28px;line-height:1.15;margin:0 0 10px;font-weight:700;letter-spacing:-.01em}
+.guide .lede{color:var(--muted);margin:0 0 28px;max-width:34ch}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.steps button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:28px 1fr;gap:12px;width:100%;padding:12px 14px;border-radius:14px;cursor:pointer}
+.steps button:focus-visible{outline:3px solid var(--accent)}
+.steps .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:14px;border:1.5px solid var(--line);color:var(--muted)}
+.steps .t{font-weight:600}
+.steps .d{grid-column:2;color:var(--muted);font-size:14px;line-height:1.4;display:none}
+.steps button[aria-current="step"]{background:var(--surface)}
+.steps button[aria-current="step"] .n{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.steps button[aria-current="step"] .d{display:block}
+.restart{margin-top:20px;background:none;border:1.5px solid var(--line);border-radius:999px;padding:8px 16px;font-weight:600;font-size:14px}
+
+/* phone */
+.phone{position:relative;width:390px;height:min(844px,calc(100vh - 48px));min-height:640px;border-radius:46px;background:var(--frame);padding:10px;flex:none;box-shadow:0 30px 60px -20px rgba(10,20,20,.45)}
+.screen{position:relative;width:100%;height:100%;border-radius:37px;overflow:hidden;background:var(--land);isolation:isolate}
+
+.map{position:absolute;inset:0 0 auto 0;height:100%;transition:height .4s cubic-bezier(.3,.7,.2,1)}
+.map svg{width:100%;height:100%;display:block}
+[data-step="sheet"] .map{height:44%}
+.m-land{fill:var(--land)} .m-block{fill:var(--block)} .m-road{fill:var(--road);stroke:var(--road-edge);stroke-width:1}
+.m-compound{fill:var(--compound);stroke:var(--wall);stroke-width:3;stroke-dasharray:0}
+.m-label{fill:var(--muted);font-size:11px;font-weight:600}
+.m-gate{fill:var(--wall)}
+.ent{cursor:pointer;opacity:0;pointer-events:none;transition:opacity .25s}
+[data-step="sheet"] .ent{opacity:1;pointer-events:auto}
+.ent circle.ring{fill:var(--surface);stroke:var(--accent);stroke-width:3}
+.ent.on circle.ring{fill:var(--accent)}
+.ent text{font-size:11px;font-weight:700;fill:var(--ink)}
+.ent rect{fill:var(--surface)}
+#route{fill:none;stroke:var(--go);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:2 9;opacity:0;transition:opacity .3s}
+[data-step="sent"] #route{opacity:1}
+#pin{transition:transform .55s cubic-bezier(.3,1.4,.4,1)}
+#pinBadge{opacity:0;transition:opacity .3s .3s}
+[data-step="sent"] #pinBadge{opacity:1}
+#pinBadge rect{fill:var(--ink)} #pinBadge text{fill:var(--surface);font-size:11px;font-weight:600}
+#gpsGhost{opacity:0;transition:opacity .3s}
+.moved #gpsGhost{opacity:.55}
+
+/* top bar */
+.top{position:absolute;top:0;left:0;right:0;padding:54px 16px 0;display:flex;justify-content:space-between;align-items:center;pointer-events:none;z-index:2}
+.top .pill{pointer-events:auto;background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+.notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:110px;height:30px;background:var(--frame);border-radius:20px;z-index:5}
+
+/* banner */
+.banner{position:absolute;left:14px;right:14px;top:104px;z-index:3;display:flex;gap:12px;align-items:center;text-align:left;
+  background:var(--accent);color:var(--accent-ink);border:0;border-radius:18px;padding:13px 14px;box-shadow:0 8px 20px -8px rgba(160,110,0,.6);
+  transition:transform .3s, opacity .3s}
+.banner .ico{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.45);display:grid;place-items:center;flex:none;position:relative}
+.banner .ico::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--accent-ink);opacity:.5;animation:pulse 1.8s infinite}
+.banner b{display:block;font-size:16px;line-height:1.2}
+.banner span{font-size:13.5px;line-height:1.3;display:block}
+.banner .chev{margin-left:auto;font-size:22px;line-height:1}
+[data-step]:not([data-step="matched"]) .banner{opacity:0;transform:translateY(-12px);pointer-events:none}
+@keyframes pulse{0%{transform:scale(.9);opacity:.6}70%{transform:scale(1.25);opacity:0}100%{opacity:0}}
+
+/* driver card */
+.card{position:absolute;left:0;right:0;bottom:0;z-index:3;background:var(--surface);border-radius:26px 26px 0 0;padding:14px 18px 26px;box-shadow:0 -6px 24px rgba(0,0,0,.12);transition:transform .4s cubic-bezier(.3,.7,.2,1)}
+[data-step="sheet"] .card{transform:translateY(105%)}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.eta{font-size:21px;font-weight:700;line-height:1.2;margin:0}
+.eta-sub{color:var(--muted);font-size:14.5px;margin:2px 0 14px}
+.status{display:none;align-items:center;gap:8px;background:var(--go-soft);color:var(--go);border-radius:12px;padding:8px 12px;font-size:14px;font-weight:600;margin-bottom:12px}
+[data-step="sent"] .status{display:flex}
+.drv{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.avatar{width:46px;height:46px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;font-weight:700;font-size:18px;flex:none}
+.drv .who b{display:block;line-height:1.2}
+.drv .who span{color:var(--muted);font-size:13.5px}
+.plate{margin-left:auto;text-align:right;font-size:13px;color:var(--muted);line-height:1.25}
+.plate b{display:block;color:var(--ink);font-size:12.5px;white-space:nowrap}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.btn{border:0;border-radius:14px;padding:12px 14px;font-weight:600;font-size:15px;background:var(--surface-2)}
+.btn.primary{background:var(--ink);color:var(--surface)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.calls{font-size:12.5px;color:var(--muted);text-align:center;margin-top:10px}
+.only-sent{display:none} [data-step="sent"] .only-sent{display:block}
+[data-step="sent"] .hide-sent{display:none}
+
+/* sheet */
+.sheet{position:absolute;left:0;right:0;bottom:0;height:58%;z-index:4;background:var(--surface);border-radius:26px 26px 0 0;
+  box-shadow:0 -8px 30px rgba(0,0,0,.18);transform:translateY(105%);transition:transform .4s cubic-bezier(.3,.7,.2,1);display:flex;flex-direction:column}
+[data-step="sheet"] .sheet{transform:none}
+.sheet-head{padding:12px 18px 6px;flex:none}
+.sheet-head h2{font-size:20px;line-height:1.2;margin:0}
+.sheet-head p{margin:3px 0 0;color:var(--muted);font-size:14px;line-height:1.35}
+.sheet-body{overflow-y:auto;padding:6px 18px 12px;flex:1}
+.sec{font-size:14px;font-weight:600;margin:12px 0 8px;display:flex;justify-content:space-between}
+.sec small{font-weight:400;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:7px 12px 6px;text-align:left;line-height:1.15}
+.chip b{display:block;font-weight:600;font-size:14.5px}
+.chip span{font-size:12.5px;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.chip[aria-pressed="true"] span{color:var(--ink)}
+.ents{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ents .chip{text-align:center}
+.voice{display:flex;align-items:center;gap:12px;width:100%;border:1.5px dashed var(--line);background:none;border-radius:14px;padding:10px 12px;text-align:left}
+.voice .mic{width:36px;height:36px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;flex:none}
+.voice.rec{border-style:solid;border-color:var(--danger)}
+.voice.rec .mic{background:var(--danger);color:#fff;animation:blink 1s infinite}
+.voice.done{border-style:solid;border-color:var(--go);background:var(--go-soft)}
+.voice.done .mic{background:var(--go);color:#fff}
+@keyframes blink{50%{opacity:.6}}
+.wave{display:flex;gap:2px;align-items:center;height:18px;margin-left:auto}
+.wave i{width:3px;border-radius:2px;background:currentColor;opacity:.6}
+.sheet-foot{padding:10px 18px 22px;border-top:1px solid var(--line);flex:none}
+.sheet-foot .btn{width:100%;padding:14px}
+.sheet-foot .row{display:flex;gap:10px}
+.sheet-foot .row .btn:first-child{flex:0 0 auto;width:auto}
+
+/* toast */
+.toast{position:absolute;left:50%;top:104px;z-index:6;transform:translate(-50%,-20px);opacity:0;background:var(--go);color:#fff;font-weight:600;border-radius:999px;padding:9px 16px;font-size:14.5px;white-space:nowrap;transition:.35s;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* driver screen */
+.driver{position:absolute;inset:0;z-index:7;background:#11181B;color:#EAF0EE;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .45s cubic-bezier(.3,.7,.2,1)}
+[data-step="driver"] .driver{transform:none}
+.nav{background:#1F6F4F;padding:58px 18px 16px;display:flex;gap:14px;align-items:center}
+.nav .arrow{font-size:34px;line-height:1}
+.nav b{font-size:20px;display:block;line-height:1.2}
+.nav span{opacity:.85;font-size:14px}
+.dbody{padding:16px 18px;flex:1;overflow-y:auto}
+.dtag{font-size:13px;color:#9FB0AC;margin:0 0 4px}
+.dtitle{font-size:22px;font-weight:700;line-height:1.2;margin:0}
+.dbn{font-size:17px;color:#F2B21B;margin:2px 0 14px;font-weight:600}
+.dchips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.dchips span{background:#2A3438;border-radius:10px;padding:6px 10px;font-size:13.5px;line-height:1.2}
+.dchips small{display:block;color:#F2B21B;font-size:12px}
+.dvoice{display:flex;align-items:center;gap:12px;background:#222D31;border-radius:14px;padding:10px 12px;margin-bottom:14px;border:0;width:100%;color:inherit;text-align:left}
+.dvoice .play{width:36px;height:36px;border-radius:50%;background:#F2B21B;color:#2A1E00;display:grid;place-items:center;flex:none;font-size:14px}
+.dvoice .wave{color:#F2B21B}
+.dvoice.playing .wave i{animation:bar .6s infinite alternate}
+@keyframes bar{to{transform:scaleY(.4)}}
+.dnote{background:#222D31;border-radius:14px;padding:12px;font-size:14px;color:#BFCBC8}
+.dnote b{color:#EAF0EE}
+.dfoot{padding:12px 18px 24px;display:grid;gap:10px}
+.dfoot .btn{background:#2A3438;color:#EAF0EE;padding:14px}
+.dfoot .btn.primary{background:#F2B21B;color:#2A1E00}
+
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+@media (max-width: 760px){
+  .stage{padding:0;gap:0;display:block;height:100%}
+  .guide{display:none}
+  .phone{width:100%;height:100%;min-height:0;border-radius:0;padding:0;box-shadow:none}
+  .screen{border-radius:0}
+  .notch{display:none}
+  .top{padding-top:calc(14px + env(safe-area-inset-top,0px))}
+  .banner{top:calc(64px + env(safe-area-inset-top,0px))}
+  .toast{top:calc(64px + env(safe-area-inset-top,0px))}
+  .nav{padding-top:calc(18px + env(safe-area-inset-top,0px))}
+  .help{display:block}
+}
+.help{display:none;pointer-events:auto;background:var(--surface);border:0;border-radius:999px;padding:7px 12px;font-weight:600;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+</style>
+</head>
+<body>
+<div class="stage" id="app" data-step="matched">
+
+  <aside class="guide">
+    <h1>Landmark-First Pickup</h1>
+    <p class="lede">A fix for the last 50 meters of a ride in Dhaka, where the pin lands on the main road but the rider is waiting at a gate around the block.</p>
+    <ol class="steps" id="steps">
+      <li><button data-go="matched"><span class="n">1</span><span class="t">Ride matched</span><span class="d">The GPS pin dropped on Road 11, the main road. The rider is actually inside a gated compound, so the driver is heading to the wrong side.</span></button></li>
+      <li><button data-go="sheet"><span class="n">2</span><span class="t">Add a landmark</span><span class="d">One tap opens a sheet with local landmark tags in English and Bangla, the exact entrance, and an optional voice note.</span></button></li>
+      <li><button data-go="sent"><span class="n">3</span><span class="t">Pin moves to the gate</span><span class="d">The pickup pin snaps to the chosen entrance and the driver’s route updates instantly. No phone call needed.</span></button></li>
+      <li><button data-go="driver"><span class="n">4</span><span class="t">Driver’s screen</span><span class="d">The driver sees the gate, the landmarks in Bangla and the voice note before arriving.</span></button></li>
+    </ol>
+    <button class="restart" id="restart">Restart demo</button>
+  </aside>
+
+  <div class="phone">
+    <div class="screen" id="screen">
+      <div class="notch"></div>
+
+      <div class="map">
+        <svg id="map" viewBox="-20 40 400 860" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Map of the pickup area in Banani">
+          <rect class="m-land" x="-200" y="-200" width="760" height="1160"/>
+          <!-- blocks -->
+          <rect class="m-block" x="50" y="20" width="110" height="80" rx="4"/>
+          <rect class="m-block" x="180" y="20" width="140" height="70" rx="4"/>
+          <rect class="m-block" x="50" y="112" width="80" height="62" rx="4"/>
+          <rect class="m-block" x="350" y="230" width="60" height="200" rx="4"/>
+          <rect class="m-block" x="-20" y="230" width="40" height="200" rx="4"/>
+          <rect class="m-block" x="140" y="490" width="90" height="70" rx="4"/>
+          <rect class="m-block" x="245" y="490" width="100" height="90" rx="4"/>
+          <rect class="m-block" x="20" y="580" width="140" height="80" rx="4"/>
+          <rect class="m-block" x="180" y="600" width="160" height="70" rx="4"/>
+          <rect class="m-block" x="20" y="690" width="320" height="60" rx="4"/>
+          <!-- roads -->
+          <rect class="m-road" x="-10" y="444" width="380" height="32"/>
+          <rect class="m-road" x="20" y="188" width="334" height="22"/>
+          <rect class="m-road" x="318" y="188" width="24" height="270"/>
+          <rect class="m-road" x="28" y="188" width="12" height="270"/>
+          <rect class="m-road" x="170" y="476" width="16" height="290"/>
+          <text class="m-label" x="70" y="464">Road 11</text>
+          <text class="m-label" x="60" y="203">Lane 4</text>
+          <text class="m-label" x="10" y="140" transform="rotate(-90 22 140)">Narrow alley</text>
+          <!-- compound -->
+          <rect class="m-compound" x="60" y="222" width="244" height="208" rx="3"/>
+          <rect class="m-block" x="84" y="246" width="96" height="70" rx="3"/>
+          <rect class="m-block" x="196" y="246" width="88" height="110" rx="3"/>
+          <rect class="m-block" x="84" y="334" width="96" height="74" rx="3"/>
+          <text class="m-label" x="98" y="286">House 23</text>
+          <!-- gates on wall -->
+          <rect class="m-gate" x="170" y="426" width="24" height="8" rx="2"/>
+          <rect class="m-gate" x="220" y="218" width="24" height="8" rx="2"/>
+          <rect class="m-gate" x="56" y="314" width="8" height="24" rx="2"/>
+          <!-- mosque -->
+          <g transform="translate(258 132)">
+            <rect class="m-block" x="0" y="20" width="44" height="30" rx="2"/>
+            <path d="M8 22 a14 14 0 0 1 28 0z" fill="var(--wall)"/>
+            <rect x="40" y="2" width="5" height="48" fill="var(--wall)"/>
+            <text class="m-label" x="-6" y="64">Mosque</text>
+          </g>
+          <!-- super shop -->
+          <g transform="translate(36 492)">
+            <rect class="m-block" x="0" y="0" width="90" height="50" rx="3"/>
+            <text class="m-label" x="10" y="30">Super shop</text>
+          </g>
+
+          <path id="route" d=""/>
+
+          <!-- car -->
+          <g id="car" style="transform:translate(350px,460px)">
+            <rect x="-13" y="-7" width="26" height="14" rx="4" fill="var(--ink)"/>
+            <rect x="2" y="-5" width="7" height="10" rx="2" fill="var(--surface)" opacity=".7"/>
+          </g>
+
+          <!-- entrance targets -->
+          <g class="ent" data-ent="main" transform="translate(182 430)" role="button" tabindex="0" aria-label="Main gate">
+            <circle class="ring" r="10"/><rect x="-32" y="14" width="64" height="18" rx="9"/><text x="0" y="27" text-anchor="middle">Main gate</text>
+          </g>
+          <g class="ent" data-ent="back" transform="translate(232 222)" role="button" tabindex="0" aria-label="Back gate">
+            <circle class="ring" r="10"/><rect x="-32" y="14" width="64" height="18" rx="9"/><text x="0" y="27" text-anchor="middle">Back gate</text>
+          </g>
+          <g class="ent" data-ent="side" transform="translate(60 326)" role="button" tabindex="0" aria-label="Side gate">
+            <circle class="ring" r="10"/><rect x="14" y="-9" width="64" height="18" rx="9"/><text x="46" y="4" text-anchor="middle">Side gate</text>
+          </g>
+
+          <!-- ghost of original GPS pin -->
+          <g id="gpsGhost" transform="translate(182 460)">
+            <circle r="6" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 3"/>
+          </g>
+
+          <!-- rider pin -->
+          <g id="pin" style="transform:translate(182px,460px)">
+            <circle r="18" fill="var(--accent)" opacity=".22"/>
+            <path d="M0 0 C-4 -10 -12 -14 -12 -24 a12 12 0 0 1 24 0 C12 -14 4 -10 0 0z" fill="var(--ink)"/>
+            <circle cy="-24" r="5" fill="var(--accent)"/>
+            <g id="pinBadge"><rect x="-50" y="-66" rx="11" height="22" width="100"/><text x="0" y="-51" text-anchor="middle" id="pinBadgeText">Back gate</text></g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="top">
+        <span class="pill" id="topPill">Pickup, Road 11</span>
+        <button class="help" id="help">Steps</button>
+      </div>
+
+      <button class="banner" id="openSheet">
+        <span class="ico" aria-hidden="true">📍</span>
+        <span><b>Hard place to find?</b><span>Tell Rahim which gate you’re at</span></span>
+        <span class="chev" aria-hidden="true">›</span>
+      </button>
+
+      <div class="toast" id="toast">Sent to Rahim</div>
+
+      <section class="card" aria-live="polite">
+        <div class="grab"></div>
+        <div class="status" id="seen">✓ <span id="seenText">Sent. Waiting for Rahim to see it</span></div>
+        <p class="eta" id="eta">Rahim is 4 min away</p>
+        <p class="eta-sub" id="etaSub">Heading to your pin on Road 11</p>
+        <div class="drv">
+          <div class="avatar">R</div>
+          <div class="who"><b>Rahim</b><span>★ 4.9, 2,140 trips</span></div>
+          <div class="plate"><b>DHAKA METRO GA 27-4512</b>White Toyota Axio</div>
+        </div>
+        <div class="actions">
+          <button class="btn hide-sent" id="openSheet2">Add a landmark</button>
+          <button class="btn only-sent" id="editSheet">Edit landmark</button>
+          <button class="btn primary hide-sent" id="callBtn">Call</button>
+          <button class="btn primary only-sent" id="toDriver">See driver’s screen</button>
+        </div>
+        <p class="calls" id="calls">Riders in gated areas get an average of 2 or more calls per pickup</p>
+      </section>
+
+      <section class="sheet" aria-label="Help your driver find you">
+        <div class="sheet-head">
+          <div class="grab"></div>
+          <h2>Help Rahim find you</h2>
+          <p>Your pin is on the main road. Pick the gate and a landmark so he comes straight to you.</p>
+        </div>
+        <div class="sheet-body">
+          <div class="sec">Which entrance? <small>or tap the map</small></div>
+          <div class="ents" id="ents">
+            <button class="chip" data-ent="main" aria-pressed="false"><b>Main gate</b><span>মেইন গেট</span></button>
+            <button class="chip" data-ent="back" aria-pressed="false"><b>Back gate</b><span>পেছনের গেট</span></button>
+            <button class="chip" data-ent="side" aria-pressed="false"><b>Side gate</b><span>পাশের গেট</span></button>
+          </div>
+          <div class="sec">What’s nearby? <small>up to 3</small></div>
+          <div class="chips" id="tags"></div>
+          <div class="sec">Voice note <small>optional</small></div>
+          <button class="voice" id="voice">
+            <span class="mic" aria-hidden="true">🎙</span>
+            <span id="voiceText">Record a short note for Rahim</span>
+            <span class="wave" id="voiceWave" hidden></span>
+          </button>
+        </div>
+        <div class="sheet-foot">
+          <div class="row">
+            <button class="btn" id="cancel">Cancel</button>
+            <button class="btn primary" id="send" disabled>Send to Rahim</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="driver" aria-label="Driver’s screen">
+        <div class="nav">
+          <span class="arrow" aria-hidden="true" id="navArrow">↰</span>
+          <div><b id="navTitle">Turn left onto Lane 4</b><span id="navSub">in 120 m</span></div>
+        </div>
+        <div class="dbody">
+          <p class="dtag">Pickup instructions from rider</p>
+          <p class="dtitle" id="dTitle">Back gate, Lane 4</p>
+          <p class="dbn" id="dBn">লেন ৪, পেছনের গেট</p>
+          <div class="dchips" id="dTags"></div>
+          <button class="dvoice" id="dVoice">
+            <span class="play" id="playIco">▶</span>
+            <span>Voice note from rider, 0:06</span>
+            <span class="wave" id="dWave"></span>
+          </button>
+          <div class="dnote" id="dNote"><b>Rider pin moved.</b> The original pin was on Road 11. Your route now ends at the gate the rider picked.</div>
+        </div>
+        <div class="dfoot">
+          <button class="btn primary" id="arrived">I’ve arrived at the gate</button>
+          <button class="btn" id="backRider">Back to rider view</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const app=document.getElementById('app');
+  const $=id=>document.getElementById(id);
+  const TAGS=[
+    {id:'gated',en:'Gated community',bn:'গেটেড এলাকা'},
+    {id:'alley',en:'Narrow alley',bn:'সরু গলি'},
+    {id:'behind',en:'Behind building',bn:'বিল্ডিংয়ের পেছনে'},
+    {id:'mosque',en:'Near mosque',bn:'মসজিদের পাশে'},
+    {id:'shop',en:'Near super shop',bn:'সুপার শপের পাশে'},
+    {id:'guard',en:'Guard at gate',bn:'গেটে দারোয়ান'}
+  ];
+  const ENT={
+    main:{x:182,y:432,label:'Main gate',road:'Road 11',bn:'রোড ১১, মেইন গেট',route:'M290 460 L182 460 L182 434',nav:['↑','Continue on Road 11','gate is on your left in 110 m'],eta:'2 min'},
+    back:{x:232,y:220,label:'Back gate',road:'Lane 4',bn:'লেন ৪, পেছনের গেট',route:'M290 460 L330 460 L330 199 L232 199 L232 218',nav:['↰','Turn left onto Lane 4','in 120 m, gate faces the mosque'],eta:'3 min'},
+    side:{x:60,y:326,label:'Side gate',road:'the narrow alley',bn:'সরু গলি, পাশের গেট',route:'M290 460 L34 460 L34 326 L56 326',nav:['↱','Turn right into the narrow alley','in 250 m, bikes and CNGs only past here'],eta:'4 min'}
+  };
+  const GPS={x:182,y:460};
+  const S={step:'matched',tags:new Set(),ent:null,voice:'none',seen:false,arrived:false};
+  let timers=[];
+  const later=(fn,ms)=>timers.push(setTimeout(fn,ms));
+  const clearTimers=()=>{timers.forEach(clearTimeout);timers=[]};
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // build tag chips
+  const tagWrap=$('tags');
+  TAGS.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='chip';b.dataset.tag=t.id;b.setAttribute('aria-pressed','false');
+    b.innerHTML='<b>'+t.en+'</b><span>'+t.bn+'</span>';
+    b.onclick=()=>{ if(S.tags.has(t.id)) S.tags.delete(t.id); else if(S.tags.size<3) S.tags.add(t.id); render(); };
+    tagWrap.appendChild(b);
+  });
+  const waveHTML=n=>Array.from({length:n},(_,i)=>'<i style="height:'+(5+Math.round(Math.abs(Math.sin(i*1.7))*13))+'px"></i>').join('');
+  $('dWave').innerHTML=waveHTML(18);
+
+  // map viewBox tween
+  const svg=$('map'); let vb=[-20,40,400,860], vbAnim=null;
+  function setVB(target){
+    if(reduce){vb=target.slice();svg.setAttribute('viewBox',vb.join(' '));return}
+    cancelAnimationFrame(vbAnim);
+    const from=vb.slice(), t0=performance.now(), d=420;
+    const step=now=>{const k=Math.min(1,(now-t0)/d), e=1-Math.pow(1-k,3);
+      vb=from.map((v,i)=>v+(target[i]-v)*e); svg.setAttribute('viewBox',vb.join(' '));
+      if(k<1) vbAnim=requestAnimationFrame(step)};
+    vbAnim=requestAnimationFrame(step);
+  }
+
+  // car
+  const car=$('car'); let carAnim=null;
+  const placeCar=(x,y)=>car.style.transform='translate('+x+'px,'+y+'px)';
+  function driveIntro(){
+    cancelAnimationFrame(carAnim); const t0=performance.now(), d=reduce?1:5000;
+    const step=now=>{const k=Math.min(1,(now-t0)/d); placeCar(350-60*k,460); if(k<1) carAnim=requestAnimationFrame(step)};
+    carAnim=requestAnimationFrame(step);
+  }
+  function driveRoute(){
+    cancelAnimationFrame(carAnim); const p=$('route'); const L=p.getTotalLength(); if(!L) return;
+    const t0=performance.now(), d=reduce?1:6000;
+    const step=now=>{const k=Math.min(1,(now-t0)/d)*0.45; const pt=p.getPointAtLength(L*k); placeCar(pt.x,pt.y); if(k<0.45) carAnim=requestAnimationFrame(step)};
+    carAnim=requestAnimationFrame(step);
+  }
+
+  function go(step){
+    clearTimers();
+    if((step==='sent'||step==='driver') && !S.ent && S.tags.size===0){ S.ent='back'; S.tags=new Set(['mosque','gated']); S.voice='done'; }
+    const prev=S.step; S.step=step;
+    if(step==='matched'){ S.seen=false; placeCar(350,460); driveIntro(); }
+    if(step==='sent' && prev!=='driver'){
+      S.seen=false; const t=$('toast'); t.classList.add('show'); later(()=>t.classList.remove('show'),1800);
+      later(()=>{S.seen=true;render()},1700);
+      requestAnimationFrame(()=>{ placeCar(290,460); driveRoute(); });
+    }
+    if(step==='driver'){ S.arrived=false; S.seen=true; }
+    render();
+  }
+
+  function render(){
+    app.dataset.step=S.step;
+    const e=S.ent?ENT[S.ent]:null;
+    // steps
+    document.querySelectorAll('#steps button').forEach(b=>{ if(b.dataset.go===(S.step==='sending'?'sheet':S.step)) b.setAttribute('aria-current','step'); else b.removeAttribute('aria-current'); });
+    // viewbox
+    setVB(S.step==='sheet'?[0,150,360,380]:[-20,40,400,860]);
+    // pin
+    const showEnt=e && S.step!=='matched';
+    const pos=showEnt?e:GPS;
+    $('pin').style.transform='translate('+pos.x+'px,'+pos.y+'px)';
+    $('screen').classList.toggle('moved',!!showEnt);
+    if(e){ const txt=e.label+(S.tags.size?', '+TAGS.find(t=>S.tags.has(t.id)).en.toLowerCase():''); $('pinBadgeText').textContent=txt; {const w=Math.round(txt.length*6.3+22);const r=$('pinBadge').querySelector('rect');r.setAttribute('width',w);r.setAttribute('x',-w/2);} }
+    else { $('pinBadgeText').textContent='Your pickup'; const r=$('pinBadge').querySelector('rect'); r.setAttribute('width',96); r.setAttribute('x',-48); }
+    $('route').setAttribute('d',e?e.route:'M290 460 L182 460');
+    // entrance selection
+    document.querySelectorAll('[data-ent]').forEach(el=>{
+      const on=el.dataset.ent===S.ent;
+      if(el.tagName==='BUTTON') el.setAttribute('aria-pressed',on); else el.classList.toggle('on',on);
+    });
+    document.querySelectorAll('#tags .chip').forEach(b=>{
+      const on=S.tags.has(b.dataset.tag); b.setAttribute('aria-pressed',on);
+      b.disabled=!on && S.tags.size>=3; b.style.opacity=b.disabled?.45:1;
+    });
+    // voice
+    const v=$('voice'); v.classList.toggle('rec',S.voice==='rec'); v.classList.toggle('done',S.voice==='done');
+    $('voiceWave').hidden=S.voice==='none';
+    // send
+    const send=$('send'); const ready=!!(S.ent||S.tags.size);
+    send.disabled=!ready||S.step==='sending'||S.voice==='rec'; send.textContent=S.step==='sending'?'Sending…':'Send to Rahim';
+    // card
+    if(S.step==='sent'||S.step==='driver'){
+      $('eta').textContent=e?'Rahim is heading to the '+e.label.toLowerCase():'Rahim has your landmark';
+      $('etaSub').textContent=e?'Route updated to '+e.road+', about '+e.eta:'Route unchanged, about 4 min';
+      $('seenText').textContent=S.seen?'Rahim saw your instructions':'Sent. Waiting for Rahim to see it';
+      $('calls').textContent='No call needed. Rahim can play your voice note while driving.';
+      $('topPill').textContent='Pickup, '+(e?e.label:'Road 11');
+    } else {
+      $('eta').textContent='Rahim is 4 min away';
+      $('etaSub').textContent='Heading to your pin on Road 11';
+      $('calls').textContent='Pins on main roads often miss the gate riders are waiting at';
+      $('topPill').textContent='Pickup, Road 11';
+    }
+    // driver screen
+    if(e){ $('navArrow').textContent=e.nav[0]; $('navTitle').textContent=e.nav[1]; $('navSub').textContent=e.nav[2];
+      $('dTitle').textContent=e.label+', '+e.road; $('dBn').textContent=e.bn; }
+    else { $('navArrow').textContent='↑'; $('navTitle').textContent='Continue on Road 11'; $('navSub').textContent='rider pin in 300 m';
+      $('dTitle').textContent='Rider’s pin, Road 11'; $('dBn').textContent='রোড ১১'; }
+    $('dTags').innerHTML=TAGS.filter(t=>S.tags.has(t.id)).map(t=>'<span>'+t.en+'<small>'+t.bn+'</small></span>').join('');
+    $('dVoice').hidden=S.voice!=='done';
+    $('dNote').innerHTML=S.arrived?'<b>Rider notified.</b> They know you’re waiting at the '+(e?e.label.toLowerCase():'pin')+'.':(e?'<b>Rider pin moved.</b> The original pin was on Road 11. Your route now ends at the gate the rider picked.':'<b>Landmark added.</b> Look for the places above near the rider’s pin.');
+    $('arrived').textContent=S.arrived?'Waiting for rider':'I’ve arrived at the gate';
+    $('arrived').disabled=S.arrived;
+  }
+
+  // events
+  $('openSheet').onclick=()=>go('sheet');
+  $('openSheet2').onclick=()=>go('sheet');
+  $('editSheet').onclick=()=>go('sheet');
+  $('cancel').onclick=()=>go(S.ent||S.tags.size?(S.seen?'sent':'matched'):'matched');
+  $('callBtn').onclick=()=>{const t=$('toast');t.textContent='Try adding a landmark first';t.style.background='var(--ink)';t.classList.add('show');later(()=>{t.classList.remove('show');later(()=>{t.textContent='Sent to Rahim';t.style.background=''},400)},1600)};
+  document.querySelectorAll('[data-ent]').forEach(el=>{
+    const pick=()=>{S.ent=S.ent===el.dataset.ent?null:el.dataset.ent; render()};
+    el.addEventListener('click',pick);
+    el.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();pick()}});
+  });
+  $('voice').onclick=()=>{
+    if(S.voice==='rec') return;
+    if(S.voice==='done'){S.voice='none';$('voiceText').textContent='Record a short note for Rahim';render();return}
+    S.voice='rec'; $('voiceText').textContent='Recording… “I’m at the back gate, opposite the mosque”'; $('voiceWave').innerHTML=waveHTML(12); render();
+    later(()=>{S.voice='done';$('voiceText').textContent='Voice note, 0:06. Tap to remove';render()},2400);
+  };
+  $('send').onclick=()=>{ S.step='sending'; render(); later(()=>go('sent'),900); };
+  $('toDriver').onclick=()=>go('driver');
+  $('backRider').onclick=()=>go('sent');
+  $('arrived').onclick=()=>{S.arrived=true;render()};
+  $('dVoice').onclick=()=>{const b=$('dVoice');b.classList.add('playing');$('playIco').textContent='❚❚';later(()=>{b.classList.remove('playing');$('playIco').textContent='▶'},3000)};
+  document.querySelectorAll('#steps button').forEach(b=>b.onclick=()=>go(b.dataset.go));
+  $('restart').onclick=()=>{S.tags=new Set();S.ent=null;S.voice='none';$('voiceText').textContent='Record a short note for Rahim';go('matched')};
+  $('help').onclick=()=>{const order=['matched','sheet','sent','driver'];const i=order.indexOf(S.step==='sending'?'sheet':S.step);if(i===3){$('restart').onclick()}else go(order[i+1])};
+  $('help').textContent='Next step';
+
+  go('matched');
+})();
+</script>
+</body>
+</html>
